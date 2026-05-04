@@ -96,6 +96,8 @@ class TVClient: ObservableObject {
     private func reset() {
         isConnected = false
         connection = nil
+        browser?.cancel()
+        browser = nil
         recvBuf = Data()
         pendingType = nil
         pendingLen = nil

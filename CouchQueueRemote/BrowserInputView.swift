@@ -129,7 +129,11 @@ struct BrowserInputView: View {
             HStack(spacing: 12) {
                 Button {
                     engine.deleteChar()
-                    if !keyText.isEmpty { keyText.removeLast(); lastKey = keyText }
+                    if !keyText.isEmpty {
+                        let updated = String(keyText.dropLast())
+                        lastKey = updated   // sync before keyText so onChange sees delta = 0
+                        keyText = updated
+                    }
                 } label: {
                     Label("Delete", systemImage: "delete.left").frame(maxWidth: .infinity)
                 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreImage.CIFilterBuiltins
 
 struct ContentView: View {
     @StateObject private var server = TVServer()
@@ -122,9 +123,10 @@ struct ContentView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(.white)
-                Image(systemName: "qrcode")
-                    .font(.system(size: 90, weight: .regular))
-                    .foregroundStyle(.black)
+                qrImage(for: roomCode)
+                    .interpolation(.none)
+                    .resizable()
+                    .padding(10)
             }
             .frame(width: 160, height: 160)
 
@@ -256,6 +258,19 @@ struct ContentView: View {
             items[index].voters.append(by)
             items[index].votes += 1
         }
+    }
+
+    private func qrImage(for code: String) -> Image {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(code.utf8)
+        let context = CIContext()
+        if let ciImage = filter.outputImage,
+           let cgImage = context.createCGImage(
+               ciImage.transformed(by: CGAffineTransform(scaleX: 10, y: 10)),
+               from: ciImage.transformed(by: CGAffineTransform(scaleX: 10, y: 10)).extent) {
+            return Image(uiImage: UIImage(cgImage: cgImage))
+        }
+        return Image(systemName: "qrcode")
     }
 
     private func broadcastState() {

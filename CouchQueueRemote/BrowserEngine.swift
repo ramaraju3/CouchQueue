@@ -22,6 +22,7 @@ class BrowserEngine: NSObject, ObservableObject {
 
     private var isCapturing = false
     private var wantCapture = false
+    private var pendingCursorSend = false
 
     var isConnected: Bool { client.isConnected }
 
@@ -62,9 +63,15 @@ class BrowserEngine: NSObject, ObservableObject {
     func moveCursor(dx: CGFloat, dy: CGFloat) {
         cursorX = max(0, min(vw, cursorX + dx))
         cursorY = max(0, min(vh, cursorY + dy))
-        client.sendCommand(RemoteCommand("cursor",
-                                        nx: Double(cursorX / vw),
-                                        ny: Double(cursorY / vh)))
+        guard !pendingCursorSend else { return }
+        pendingCursorSend = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 30) { [weak self] in
+            guard let self else { return }
+            self.pendingCursorSend = false
+            self.client.sendCommand(RemoteCommand("cursor",
+                                                  nx: Double(self.cursorX / self.vw),
+                                                  ny: Double(self.cursorY / self.vh)))
+        }
     }
 
     // MARK: Actions
@@ -135,9 +142,15 @@ class BrowserEngine: NSObject, ObservableObject {
             var el=document.activeElement;
             if(!el||(el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA')) return;
             var s=el.selectionStart, e=el.selectionEnd;
-            if(s>0){
-                el.value=el.value.slice(0,s-1)+el.value.slice(e);
-                el.selectionStart=el.selectionEnd=s-1;
+            if(s===e){
+                if(s>0){
+                    el.value=el.value.slice(0,s-1)+el.value.slice(s);
+                    el.selectionStart=el.selectionEnd=s-1;
+                    el.dispatchEvent(new Event('input',{bubbles:true}));
+                }
+            } else {
+                el.value=el.value.slice(0,s)+el.value.slice(e);
+                el.selectionStart=el.selectionEnd=s;
                 el.dispatchEvent(new Event('input',{bubbles:true}));
             }
         })();

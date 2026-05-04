@@ -3,9 +3,15 @@ import SwiftUI
 struct RemoteContentView: View {
     @StateObject private var client = TVClient()
 
-    @State private var displayName = UserDefaults.standard.string(forKey: "displayName") ?? "Rama"
+    @State private var displayName = UserDefaults.standard.string(forKey: "displayName") ?? ""
     @State private var title = ""
     @State private var link = ""
+    @State private var showClearConfirm = false
+
+    private var validName: String {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Someone" : trimmed
+    }
 
     private var selectedItem: RoomItem? {
         client.items.first { $0.id == client.selectedID }
@@ -128,14 +134,14 @@ struct RemoteContentView: View {
 
             HStack {
                 Button {
-                    client.sendCommand(RemoteCommand("vote", id: item.id, by: displayName))
+                    client.sendCommand(RemoteCommand("vote", id: item.id, by: validName))
                 } label: {
-                    Label(item.voters.contains(displayName) ? "Voted" : "Vote", systemImage: item.voters.contains(displayName) ? "hand.thumbsup.fill" : "hand.thumbsup")
+                    Label(item.voters.contains(validName) ? "Voted" : "Vote", systemImage: item.voters.contains(validName) ? "hand.thumbsup.fill" : "hand.thumbsup")
                 }
                 .buttonStyle(.bordered)
 
                 Button {
-                    client.sendCommand(RemoteCommand("select", id: item.id, by: displayName))
+                    client.sendCommand(RemoteCommand("select", id: item.id, by: validName))
                 } label: {
                     Label(client.selectedID == item.id ? "On TV" : "Show", systemImage: "tv")
                 }
@@ -144,7 +150,7 @@ struct RemoteContentView: View {
                 Spacer()
 
                 Button(role: .destructive) {
-                    client.sendCommand(RemoteCommand("delete", id: item.id, by: displayName))
+                    client.sendCommand(RemoteCommand("delete", id: item.id, by: validName))
                 } label: {
                     Image(systemName: "trash")
                 }
@@ -158,12 +164,17 @@ struct RemoteContentView: View {
     private var hostControls: some View {
         HStack {
             Button(role: .destructive) {
-                client.sendCommand(RemoteCommand("clear", by: displayName))
+                showClearConfirm = true
             } label: {
                 Label("Clear", systemImage: "xmark.circle")
             }
             .buttonStyle(.bordered)
             .disabled(!client.isConnected || client.items.isEmpty)
+            .confirmationDialog("Clear the entire queue?", isPresented: $showClearConfirm, titleVisibility: .visible) {
+                Button("Clear Queue", role: .destructive) {
+                    client.sendCommand(RemoteCommand("clear", by: validName))
+                }
+            }
 
             Spacer()
 
@@ -186,7 +197,7 @@ struct RemoteContentView: View {
                 id: UUID().uuidString,
                 title: cleanTitle,
                 url: cleanLink.isEmpty ? cleanTitle : cleanLink,
-                by: displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Someone" : displayName
+                by: validName
             )
         )
         title = ""
