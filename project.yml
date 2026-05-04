@@ -1,0 +1,45 @@
+name: CouchQueue
+options:
+  bundleIdPrefix: com.couchqueue
+  minimumXcodeGenVersion: "2.18"
+
+targets:
+  CouchQueue:
+    type: application
+    platform: tvOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: CouchQueue
+    info:
+      path: CouchQueue/Info.plist
+      properties:
+        CFBundleDisplayName: CouchQueue
+        NSLocalNetworkUsageDescription: "CouchQueue needs local network access to receive commands from the companion remote app on your iPhone."
+        NSBonjourServices:
+          - _couchqueue._tcp
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.couchqueue.app
+        SWIFT_VERSION: "5.9"
+
+  CouchQueueRemote:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: CouchQueueRemote
+    info:
+      path: CouchQueueRemote/Info.plist
+      properties:
+        CFBundleDisplayName: CouchQueue Remote
+        NSLocalNetworkUsageDescription: "CouchQueue Remote needs local network access to find and connect to CouchQueue on your Apple TV."
+        NSBonjourServices:
+          - _couchqueue._tcp
+        UILaunchScreen: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.couchqueue.remote
+        SWIFT_VERSION: "5.9"
