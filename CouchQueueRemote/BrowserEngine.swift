@@ -2,11 +2,8 @@ import WebKit
 import UIKit
 import Combine
 
-// The iPhone IS the browser. BrowserEngine manages an offscreen WKWebView,
-// captures JPEG frames, and streams them to the Apple TV via TVClient.
-
 class BrowserEngine: NSObject, ObservableObject {
-    let client = TVClient()
+    private let client: TVClient
     private(set) var webView: WKWebView!
     private var clientCancellable: AnyCancellable?
 
@@ -23,12 +20,13 @@ class BrowserEngine: NSObject, ObservableObject {
     private var isCapturing = false
     private var wantCapture = false
     private var pendingCursorSend = false
+    private var hasStarted = false
 
     var isConnected: Bool { client.isConnected }
 
-    override init() {
+    init(client: TVClient) {
+        self.client = client
         super.init()
-        // Forward TVClient changes so SwiftUI views update on connect/disconnect
         clientCancellable = client.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
@@ -45,11 +43,12 @@ class BrowserEngine: NSObject, ObservableObject {
     }
 
     func start() {
-        client.startDiscovery()
+        guard !hasStarted else { return }
+        hasStarted = true
         navigate(to: "https://www.google.com")
     }
 
-    // Call from SwiftUI .onAppear — adds the WKWebView to the live UIKit hierarchy
+    // Call from .onAppear — adds the WKWebView to the live UIKit hierarchy
     // so that takeSnapshot() works reliably.
     func attachWebView(to window: UIWindow) {
         guard webView.superview == nil else { return }
@@ -77,7 +76,7 @@ class BrowserEngine: NSObject, ObservableObject {
     // MARK: Actions
 
     func tap() {
-        client.sendCommand(RemoteCommand("tap"))  // TV shows cursor pulse
+        client.sendCommand(RemoteCommand("tap"))
         let x = cursorX, y = cursorY
         let js = """
         (function(){
@@ -175,7 +174,6 @@ class BrowserEngine: NSObject, ObservableObject {
             }
             guard let image else { return }
 
-            // Resize to 720p for efficient streaming (≈120-250 KB per JPEG)
             let target = CGSize(width: 1280, height: 720)
             let renderer = UIGraphicsImageRenderer(size: target)
             let resized = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }

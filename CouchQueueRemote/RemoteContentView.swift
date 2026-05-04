@@ -1,12 +1,19 @@
 import SwiftUI
 
 struct RemoteContentView: View {
-    @StateObject private var client = TVClient()
+    @StateObject private var client: TVClient
+    @StateObject private var engine: BrowserEngine
 
     @State private var displayName = UserDefaults.standard.string(forKey: "displayName") ?? ""
     @State private var title = ""
     @State private var link = ""
     @State private var showClearConfirm = false
+
+    init() {
+        let client = TVClient()
+        _client = StateObject(wrappedValue: client)
+        _engine = StateObject(wrappedValue: BrowserEngine(client: client))
+    }
 
     private var validName: String {
         let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -18,6 +25,21 @@ struct RemoteContentView: View {
     }
 
     var body: some View {
+        TabView {
+            queueTab
+                .tabItem { Label("Queue", systemImage: "list.number") }
+            BrowserControlView(engine: engine)
+                .tabItem { Label("Browser", systemImage: "globe") }
+        }
+        .onAppear { client.startDiscovery() }
+        .onChange(of: displayName) { newValue in
+            UserDefaults.standard.set(newValue, forKey: "displayName")
+        }
+    }
+
+    // MARK: Queue tab
+
+    private var queueTab: some View {
         NavigationView {
             VStack(spacing: 0) {
                 statusBar
@@ -28,10 +50,6 @@ struct RemoteContentView: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("CouchQueue")
             .navigationBarTitleDisplayMode(.inline)
-        }
-        .onAppear { client.startDiscovery() }
-        .onChange(of: displayName) { newValue in
-            UserDefaults.standard.set(newValue, forKey: "displayName")
         }
     }
 
@@ -58,11 +76,9 @@ struct RemoteContentView: View {
 
     private var submitPanel: some View {
         VStack(spacing: 10) {
-            HStack {
-                TextField("Your name", text: $displayName)
-                    .textInputAutocapitalization(.words)
-                    .textFieldStyle(.roundedBorder)
-            }
+            TextField("Your name", text: $displayName)
+                .textInputAutocapitalization(.words)
+                .textFieldStyle(.roundedBorder)
 
             TextField("Title, restaurant, product, trip idea", text: $title)
                 .textFieldStyle(.roundedBorder)
@@ -73,9 +89,7 @@ struct RemoteContentView: View {
                 .autocorrectionDisabled()
                 .textFieldStyle(.roundedBorder)
 
-            Button {
-                submit()
-            } label: {
+            Button { submit() } label: {
                 Label("Add to Queue", systemImage: "plus.circle.fill")
                     .frame(maxWidth: .infinity)
             }
@@ -136,7 +150,8 @@ struct RemoteContentView: View {
                 Button {
                     client.sendCommand(RemoteCommand("vote", id: item.id, by: validName))
                 } label: {
-                    Label(item.voters.contains(validName) ? "Voted" : "Vote", systemImage: item.voters.contains(validName) ? "hand.thumbsup.fill" : "hand.thumbsup")
+                    Label(item.voters.contains(validName) ? "Voted" : "Vote",
+                          systemImage: item.voters.contains(validName) ? "hand.thumbsup.fill" : "hand.thumbsup")
                 }
                 .buttonStyle(.bordered)
 
@@ -190,17 +205,96 @@ struct RemoteContentView: View {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanLink = link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanTitle.isEmpty else { return }
-
-        client.sendCommand(
-            RemoteCommand(
-                "submit",
-                id: UUID().uuidString,
-                title: cleanTitle,
-                url: cleanLink.isEmpty ? cleanTitle : cleanLink,
-                by: validName
-            )
-        )
+        client.sendCommand(RemoteCommand(
+            "submit",
+            id: UUID().uuidString,
+            title: cleanTitle,
+            url: cleanLink.isEmpty ? cleanTitle : cleanLink,
+            by: validName
+        ))
         title = ""
         link = ""
+    }
+}
+
+// MARK: - Browser tab
+
+struct BrowserControlView: View {
+    @ObservedObject var engine: BrowserEngine
+    @State private var showInput = false
+    @State private var inputMode: BrowserInputView.Mode = .navigate
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                previewPanel
+                Divider()
+                TrackpadView(engine: engine)
+                    .frame(height: 240)
+                    .padding(12)
+            }
+            .navigationTitle(engine.pageTitle.isEmpty ? "Browser" : engine.pageTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .navigationBarLeading) {
+                    Button { engine.goBack() } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    Button { engine.goForward() } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                    Button { engine.reload() } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button {
+                        inputMode = .keyboard
+                        showInput = true
+                    } label: {
+                        Image(systemName: "keyboard")
+                    }
+                    Button {
+                        inputMode = .navigate
+                        showInput = true
+                    } label: {
+                        Image(systemName: "globe")
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showInput) {
+            BrowserInputView(engine: engine, isPresented: $showInput, initialMode: inputMode)
+        }
+        .onAppear {
+            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = scene.keyWindow ?? scene.windows.first {
+                engine.attachWebView(to: window)
+            }
+            engine.start()
+        }
+    }
+
+    private var previewPanel: some View {
+        Group {
+            if let image = engine.previewImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.black)
+            } else {
+                Color(uiColor: .secondarySystemBackground)
+                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                    .overlay {
+                        if engine.isConnected {
+                            ProgressView("Loading…")
+                        } else {
+                            Label("Not connected to Apple TV", systemImage: "wifi.slash")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+            }
+        }
     }
 }
