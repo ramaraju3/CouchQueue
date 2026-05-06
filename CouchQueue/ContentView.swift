@@ -45,7 +45,9 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 28) {
             header
 
-            if let selectedItem {
+            if server.frameData != nil {
+                browserCard
+            } else if let selectedItem {
                 selectedCard(selectedItem)
             } else {
                 emptyState
@@ -56,6 +58,35 @@ struct ContentView: View {
             joinPanel
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private var browserCard: some View {
+        ZStack {
+            if let data = server.frameData, let img = UIImage(data: data) {
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .overlay(cursorOverlay)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var cursorOverlay: some View {
+        GeometryReader { geo in
+            Circle()
+                .fill(.white.opacity(0.9))
+                .overlay(Circle().stroke(.black.opacity(0.25), lineWidth: 1))
+                .frame(width: 18, height: 18)
+                .shadow(color: .black.opacity(0.45), radius: 4)
+                .position(
+                    x: server.cursorNX * geo.size.width,
+                    y: server.cursorNY * geo.size.height
+                )
+                .animation(.linear(duration: 1.0 / 30), value: server.cursorNX)
+                .animation(.linear(duration: 1.0 / 30), value: server.cursorNY)
+        }
     }
 
     private var header: some View {

@@ -8,6 +8,8 @@ struct RemoteCommand: Codable {
     var title: String?
     var url: String?
     var by: String?
+    var nx: Double?
+    var ny: Double?
 }
 
 struct RoomItem: Codable, Identifiable, Equatable {
@@ -37,6 +39,9 @@ class TVServer: ObservableObject {
     private var pendingLen: UInt32?
 
     @Published var isClientConnected = false
+    @Published var frameData: Data?
+    @Published var cursorNX: CGFloat = 0.5
+    @Published var cursorNY: CGFloat = 0.5
 
     var onCommand: ((RemoteCommand) -> Void)?
     func start() {
@@ -99,7 +104,16 @@ class TVServer: ObservableObject {
 
             switch type {
             case 0x01:
-                if let cmd = try? JSONDecoder().decode(RemoteCommand.self, from: payload) { onCommand?(cmd) }
+                if let cmd = try? JSONDecoder().decode(RemoteCommand.self, from: payload) {
+                    if cmd.t == "cursor", let nx = cmd.nx, let ny = cmd.ny {
+                        cursorNX = CGFloat(nx)
+                        cursorNY = CGFloat(ny)
+                    } else {
+                        onCommand?(cmd)
+                    }
+                }
+            case 0x02:
+                frameData = payload
             default: break
             }
         }
